@@ -1,76 +1,49 @@
 #!/usr/bin/env bash
-# This script installs and configures the HAproxy load balancer. It configures
 # the server to send traffic to two web servers. The load balancing algorithm
 # is round-robin.
 
-# Define variables
-DOMAIN_NAME='phinehas.tech'
-WEB_SERVER_1='54.172.89.45'
-WEB_SERVER_2='100.25.144.184'
-FRONTEND_NAME='phine_frontend'
-BACKEND_NAME='phine_backend'
+sudo apt-get install -y haproxy
 
-# HAProxy configuration
-config="
-frontend $FRONTEND_NAME
-    bind *:80
-    mode http
-    default_backend $BACKEND_NAME
-    timeout client 30s
-    timeout connect 30s
-    timeout server 30s
+echo "ENABLED=1" >> /etc/default/haproxy
+mv /etc/haproxy/haproxy.cfg{,.original}
+touch /etc/haproxy/haproxy.cfg
 
-backend $BACKEND_NAME
-    balance roundrobin
-    server $DOMAIN_NAME-web-01 $WEB_SERVER_1:80 check
-    server $DOMAIN_NAME-web-02 $WEB_SERVER_2:80 check
-    timeout server 30s
-    timeout connect 30s
-"
+printf %s "global
+        log 127.0.0.1 local0 notice
+        maxconn 200
+        user haproxy
+        group haproxy
 
-# Check if the user is root
-if [ $EUID -ne 0 ]; then
-    echo "You must be root to run this script."
-    exit 1
-fi
+defaults
+        log     global
+        mode    http
+        option  httplog
+        option  dontlognull
+        retries 3
+        option redispatch
+        timeout connect 5000
+        timeout client  30000
+        timeout server  3000
+        errorfile 400 /etc/haproxy/errors/400.http
+        errorfile 403 /etc/haproxy/errors/403.http
+        errorfile 408 /etc/haproxy/errors/408.http
+        errorfile 500 /etc/haproxy/errors/500.http
+        errorfile 502 /etc/haproxy/errors/502.http
+        errorfile 503 /etc/haproxy/errors/503.http
+        errorfile 504 /etc/haproxy/errors/504.http
 
-# Function to add configuration to HAProxy
-function add_config() {
-    # Check if configuration already exists
-    if grep -q -e "$FRONTEND_NAME" -e "$BACKEND_NAME" /etc/haproxy/haproxy.cfg; then
-        echo "Configuration already exists."
-        exit 1
-    fi
+frontend http-in
+        timeout client  30000
+        bind 0:80
+        default_backend servers
 
-    # Add configuration to HAProxy
-    echo "$config" | sudo tee -a /etc/haproxy/haproxy.cfg > /dev/null
+backend servers
+        timeout connect 3000
+        timeout server  30000
+        balance roundrobin
+        server 87098-web-01 54.172.89.45: check
+        server 87098-web-02 100.25.144.184:80 checki
 
-    # Enable HAProxy if not already enabled
-    if ! grep -q "ENABLED" /etc/default/haproxy; then
-        echo "ENABLED=1" | sudo tee -a /etc/default/haproxy > /dev/null
-    fi
+" >> /etc/haproxy/haproxy.cfg
 
-    # Check HAProxy configuration syntax
-    if ! sudo haproxy -c -f /etc/haproxy/haproxy.cfg; then
-        echo "HAProxy configuration syntax check failed."
-        exit 1
-    fi
-
-    # Restart HAProxy
-    sudo systemctl restart haproxy
-}
-
-# Check if HAProxy is installed
-if ! command -v haproxy > /dev/null; then
-    # Update package list
-    sudo apt-get update -y
-
-    # Install HAProxy
-    sudo apt-get install -y haproxy
-
-    # Add configuration
-    add_config
-else
-    # Add configuration
-    add_config
-fi
+sudo service haproxy restart
