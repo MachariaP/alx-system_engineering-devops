@@ -1,1 +1,76 @@
+#!/usr/bin/env bash
+# This script installs and configures the HAproxy load balancer. It configures
+# the server to send traffic to two web servers. The load balancing algorithm
+# is round-robin.
 
+# Define variables
+DOMAIN_NAME='phinehas.tech'
+WEB_SERVER_1='54.172.89.45'
+WEB_SERVER_2='100.25.144.184'
+FRONTEND_NAME='phine_frontend'
+BACKEND_NAME='phine_backend'
+
+# HAProxy configuration
+config="
+frontend $FRONTEND_NAME
+    bind *:80
+    mode http
+    default_backend $BACKEND_NAME
+    timeout client 30s
+    timeout connect 30s
+    timeout server 30s
+
+backend $BACKEND_NAME
+    balance roundrobin
+    server $DOMAIN_NAME-web-01 $WEB_SERVER_1:80 check
+    server $DOMAIN_NAME-web-02 $WEB_SERVER_2:80 check
+    timeout server 30s
+    timeout connect 30s
+"
+
+# Check if the user is root
+if [ $EUID -ne 0 ]; then
+    echo "You must be root to run this script."
+    exit 1
+fi
+
+# Function to add configuration to HAProxy
+function add_config() {
+    # Check if configuration already exists
+    if grep -q -e "$FRONTEND_NAME" -e "$BACKEND_NAME" /etc/haproxy/haproxy.cfg; then
+        echo "Configuration already exists."
+        exit 1
+    fi
+
+    # Add configuration to HAProxy
+    echo "$config" | sudo tee -a /etc/haproxy/haproxy.cfg > /dev/null
+
+    # Enable HAProxy if not already enabled
+    if ! grep -q "ENABLED" /etc/default/haproxy; then
+        echo "ENABLED=1" | sudo tee -a /etc/default/haproxy > /dev/null
+    fi
+
+    # Check HAProxy configuration syntax
+    if ! sudo haproxy -c -f /etc/haproxy/haproxy.cfg; then
+        echo "HAProxy configuration syntax check failed."
+        exit 1
+    fi
+
+    # Restart HAProxy
+    sudo systemctl restart haproxy
+}
+
+# Check if HAProxy is installed
+if ! command -v haproxy > /dev/null; then
+    # Update package list
+    sudo apt-get update -y
+
+    # Install HAProxy
+    sudo apt-get install -y haproxy
+
+    # Add configuration
+    add_config
+else
+    # Add configuration
+    add_config
+fi
