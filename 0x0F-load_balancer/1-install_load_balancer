@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# the server to send traffic to two web servers. The load balancing algorithm
-# is round-robin.
+# This script installs and configures the HAproxy load balancer.
+# the server to send traffic to two web servers using 
+# the round-robin balancing alogarith.
 
 sudo apt-get install -y haproxy
 
