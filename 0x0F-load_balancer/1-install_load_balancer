@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -e
 
 # This script installs and configures the HAproxy load balancer. It configures
 # the server to send traffic to two web servers. The load balanceing algorithm
