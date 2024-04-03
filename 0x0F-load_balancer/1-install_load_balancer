@@ -47,4 +47,8 @@ backend servers
 
 " >> /etc/haproxy/haproxy.cfg
 
+echo "Configuring HAproxy with the following backend servers:"
+echo "web-01: 54.172.89.45:80"
+echo "web-02: 100.25.144.184:80"
+
 sudo service haproxy restart
